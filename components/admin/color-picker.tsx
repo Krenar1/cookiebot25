@@ -76,4 +76,3 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
     </div>
   )
 }
-

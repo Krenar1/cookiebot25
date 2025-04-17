@@ -69,4 +69,3 @@ export function DomainManager({ domains, onChange }: DomainManagerProps) {
     </div>
   )
 }
-

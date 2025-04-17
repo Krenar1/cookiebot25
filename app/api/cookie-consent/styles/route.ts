@@ -1,38 +1,63 @@
 import { NextResponse } from "next/server"
-import { getAllowedDomains, getConsentSettings } from "@/lib/cookie-service"
+import { getAllowedDomains, getDomainSettings } from "@/lib/cookie-service"
+import { cookieThemes } from "@/lib/cookie-themes"
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const apiKey = searchParams.get("key")
   const domain = searchParams.get("domain")
+  const debug = searchParams.get("debug") === "true"
 
   if (!apiKey || !domain) {
     return NextResponse.json({ error: "Missing API key or domain" }, { status: 400 })
   }
 
+  // Special handling for localhost testing
+  const isLocalhost = domain === "localhost" || domain === "127.0.0.1" || domain.includes(".local")
+
   // Verify if the domain is allowed to use this cookie consent
   const allowedDomains = await getAllowedDomains(apiKey)
 
-  // Check if the exact domain is in the allowed list or if there's a wildcard
-  const isDomainAllowed = allowedDomains.includes(domain) || allowedDomains.includes("*")
+  // For localhost, be more permissive with domain verification
+  let isDomainAllowed = allowedDomains.includes(domain) || allowedDomains.includes("*")
+
+  // If testing on localhost, also check if any test domains are configured
+  if (isLocalhost && !isDomainAllowed) {
+    // Check if any test domains are allowed that we can use for localhost
+    const testDomain = allowedDomains.find((d) => d !== "*" && !d.includes("localhost"))
+    if (testDomain) {
+      isDomainAllowed = true
+    }
+  }
 
   if (!isDomainAllowed) {
     return NextResponse.json({ error: "Domain not authorized", authorized: false }, { status: 403 })
   }
 
-  // Get the cookie consent settings for this API key
-  const settings = await getConsentSettings(apiKey)
-  const theme = settings.theme || {}
+  // Get domain-specific settings
+  const domainToUse = isLocalhost ? (allowedDomains[0] !== "*" ? allowedDomains[0] : "example.com") : domain
+  const domainSettings = await getDomainSettings(apiKey, domainToUse)
 
-  // Set CORS headers
+  // Get the theme configuration
+  const themeId = domainSettings.theme || "classic"
+  const theme = cookieThemes[themeId] || cookieThemes.classic
+
+  if (debug) {
+    console.log(`Styles API: Using theme ${themeId} for domain ${domainToUse}:`, theme)
+  }
+
+  // Set CORS headers to allow from any origin for testing
   const headers = new Headers()
-  headers.set("Access-Control-Allow-Origin", `https://${domain}`)
+  headers.set("Access-Control-Allow-Origin", "*") // Allow from any origin for testing
   headers.set("Access-Control-Allow-Methods", "GET")
   headers.set("Access-Control-Allow-Headers", "Content-Type")
   headers.set("Content-Type", "text/css")
+  // Add cache control to prevent caching
+  headers.set("Cache-Control", "no-store, max-age=0")
 
   // Generate CSS with the theme settings
   const css = `
+    /* Theme: ${themeId} */
     #cookie-consent-container {
       position: fixed;
       z-index: 9999;
@@ -44,14 +69,14 @@ export async function GET(request: Request) {
       bottom: 0;
       left: 0;
       right: 0;
-      background-color: ${theme.backgroundColor || "#ffffff"};
-      color: ${theme.textColor || "#333333"};
-      border-top: 1px solid ${theme.borderColor || "#e2e8f0"};
+      background-color: var(--cookie-bg-color, ${theme.backgroundColor || "#ffffff"});
+      color: var(--cookie-text-color, ${theme.textColor || "#333333"});
+      border-top: 1px solid var(--cookie-border-color, ${theme.borderColor || "#e2e8f0"});
       box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
       z-index: 9999;
       max-width: 1200px;
       margin: 0 auto;
-      border-radius: ${theme.borderRadius || "0.5rem"} ${theme.borderRadius || "0.5rem"} 0 0;
+      border-radius: var(--cookie-border-radius, ${theme.borderRadius || "0.5rem"}) var(--cookie-border-radius, ${theme.borderRadius || "0.5rem"}) 0 0;
       overflow: hidden;
     }
     
@@ -62,16 +87,20 @@ export async function GET(request: Request) {
     .cookie-consent-header h2 {
       margin: 0 0 0.5rem 0;
       font-size: 1.5rem;
-      color: ${theme.headingColor || "#111111"};
+      color: var(--cookie-heading-color, ${theme.headingColor || "#111111"});
     }
     
     .cookie-consent-header p {
       margin: 0 0 1rem 0;
-      color: ${theme.descriptionColor || "#666666"};
+      color: var(--cookie-desc-color, ${theme.descriptionColor || "#666666"});
     }
     
     .cookie-consent-body {
       margin-bottom: 1.5rem;
+    }
+    
+    .cookie-consent-body p {
+      color: var(--cookie-text-color, ${theme.textColor || "#333333"});
     }
     
     .cookie-consent-footer {
@@ -89,25 +118,25 @@ export async function GET(request: Request) {
     }
     
     .accept-all-btn {
-      background-color: ${theme.acceptButtonColor || "#2563eb"};
-      color: ${theme.acceptButtonTextColor || "#ffffff"};
+      background-color: var(--cookie-accept-btn-color, ${theme.acceptButtonColor || "#2563eb"});
+      color: var(--cookie-accept-text-color, ${theme.acceptButtonTextColor || "#ffffff"});
     }
     
     .reject-all-btn {
-      background-color: ${theme.rejectButtonColor || "#ffffff"};
-      color: ${theme.rejectButtonTextColor || "#333333"};
-      border-color: ${theme.borderColor || "#e2e8f0"} !important;
+      background-color: var(--cookie-reject-btn-color, ${theme.rejectButtonColor || "#ffffff"});
+      color: var(--cookie-reject-text-color, ${theme.rejectButtonTextColor || "#333333"});
+      border-color: var(--cookie-border-color, ${theme.borderColor || "#e2e8f0"}) !important;
     }
     
     .customize-btn {
-      background-color: ${theme.customizeButtonColor || "#ffffff"};
-      color: ${theme.customizeButtonTextColor || "#333333"};
-      border-color: ${theme.borderColor || "#e2e8f0"} !important;
+      background-color: var(--cookie-customize-btn-color, ${theme.customizeButtonColor || "#ffffff"});
+      color: var(--cookie-customize-text-color, ${theme.customizeButtonTextColor || "#333333"});
+      border-color: var(--cookie-border-color, ${theme.borderColor || "#e2e8f0"}) !important;
     }
     
     .save-preferences-btn {
-      background-color: ${theme.acceptButtonColor || "#2563eb"};
-      color: ${theme.acceptButtonTextColor || "#ffffff"};
+      background-color: var(--cookie-accept-btn-color, ${theme.acceptButtonColor || "#2563eb"});
+      color: var(--cookie-accept-text-color, ${theme.acceptButtonTextColor || "#ffffff"});
     }
     
     .cookie-settings-btn {
@@ -115,9 +144,9 @@ export async function GET(request: Request) {
       bottom: 1rem;
       right: 1rem;
       padding: 0.5rem 1rem;
-      background-color: ${theme.settingsButtonColor || "#ffffff"};
-      color: ${theme.settingsButtonTextColor || "#333333"};
-      border: 1px solid ${theme.borderColor || "#e2e8f0"};
+      background-color: var(--cookie-settings-btn-color, ${theme.settingsButtonColor || "#ffffff"});
+      color: var(--cookie-settings-text-color, ${theme.settingsButtonTextColor || "#333333"});
+      border: 1px solid var(--cookie-border-color, ${theme.borderColor || "#e2e8f0"});
       border-radius: 0.25rem;
       font-size: 0.875rem;
       cursor: pointer;
@@ -127,7 +156,7 @@ export async function GET(request: Request) {
     .cookie-category {
       margin-bottom: 1rem;
       padding-bottom: 1rem;
-      border-bottom: 1px solid ${theme.borderColor || "#e2e8f0"};
+      border-bottom: 1px solid var(--cookie-border-color, ${theme.borderColor || "#e2e8f0"});
     }
     
     .cookie-category:last-child {
@@ -143,13 +172,13 @@ export async function GET(request: Request) {
     .cookie-category-header h3 {
       margin: 0 0 0.25rem 0;
       font-size: 1rem;
-      color: ${theme.headingColor || "#111111"};
+      color: var(--cookie-heading-color, ${theme.headingColor || "#111111"});
     }
     
     .cookie-category-header p {
       margin: 0;
       font-size: 0.875rem;
-      color: ${theme.descriptionColor || "#666666"};
+      color: var(--cookie-desc-color, ${theme.descriptionColor || "#666666"});
     }
     
     /* Toggle switch styles */
@@ -192,7 +221,7 @@ export async function GET(request: Request) {
     }
     
     input:checked + .toggle-slider {
-      background-color: ${theme.switchActiveColor || "#2563eb"};
+      background-color: var(--cookie-switch-active-color, ${theme.switchActiveColor || "#2563eb"});
     }
     
     input:disabled + .toggle-slider {
@@ -221,4 +250,3 @@ export async function GET(request: Request) {
     headers,
   })
 }
-

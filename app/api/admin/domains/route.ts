@@ -64,4 +64,3 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Failed to remove domain" }, { status: 500 })
   }
 }
-

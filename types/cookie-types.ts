@@ -38,4 +38,3 @@ export interface ThemeConfig {
 
   switchActiveColor: string
 }
-

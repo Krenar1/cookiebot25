@@ -172,4 +172,3 @@ export const cookieThemes: Record<string, ThemeConfig> = {
     switchActiveColor: "#1e40af",
   },
 }
-

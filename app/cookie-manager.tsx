@@ -20,4 +20,3 @@ export default function CookieManager() {
 
   return <CookieScriptLoader settings={cookieSettings} />
 }
-

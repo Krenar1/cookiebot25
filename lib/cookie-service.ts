@@ -121,6 +121,7 @@ export async function getDomainSettings(apiKey: string, domain: string) {
     }
   }
 
+  console.log(`Retrieved domain settings for ${domain}:`, domainSettings[key])
   return domainSettings[key]
 }
 
@@ -128,8 +129,8 @@ export async function updateDomainSettings(apiKey: string, domain: string, setti
   // In a real application, this would update a database
   const key = `${apiKey}:${domain}`
 
+  console.log(`Saving domain settings for ${domain}:`, settings)
   domainSettings[key] = settings
 
   return true
 }
-

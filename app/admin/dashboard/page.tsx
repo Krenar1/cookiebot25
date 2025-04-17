@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { X, Plus, Copy, Check, LogOut, ArrowRight, Settings, Code } from "lucide-react"
+import { X, Plus, Copy, Check, LogOut, ArrowRight, Settings, Code, RefreshCw } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cookieThemes } from "@/lib/cookie-themes"
 
@@ -28,6 +28,7 @@ export default function DashboardPage() {
   >({})
   const [embedCode, setEmbedCode] = useState("")
   const [copied, setCopied] = useState(false)
+  const [saving, setSaving] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -107,65 +108,27 @@ export default function DashboardPage() {
     }
   }
 
+  // Update the embed code to be simpler and more reliable
   const generateEmbedCode = (domain: string) => {
-    // Make sure we have a complete URL with protocol
-    const host = process.env.NEXT_PUBLIC_HOST || window.location.origin
+    // Hardcode the base URL to ensure it's always correct
+    const baseUrl = "https://cookiebot25.vercel.app"
 
-    // Create a timestamp for added security
-    const timestamp = Date.now()
-
-    // Ensure the URL is properly formatted with https:// if not already included
-    const baseUrl = host.startsWith("http") ? host : `https://${host}`
-
-    // Generate a proper URL with the correct protocol and domain
-    return `<!-- Cookie Consent Banner Script -->
-<script>
-  // Debug information
-  console.log("Loading cookie consent banner for domain: ${domain}");
+    return `<script>
+(function() {
+  // Create container for the cookie consent
+  const container = document.createElement('div');
+  container.id = 'cookie-consent-container';
+  document.body.appendChild(container);
   
-  // Load the cookie consent script
-  (function() {
-    try {
-      // Create container for the cookie consent
-      if (!document.getElementById('cookie-consent-container')) {
-        const container = document.createElement('div');
-        container.id = 'cookie-consent-container';
-        document.body.appendChild(container);
-        console.log("Cookie consent container created");
-      }
-      
-      // For local testing, we'll use a special parameter
-      const isLocalhost = window.location.hostname === 'localhost' || 
-                          window.location.hostname === '127.0.0.1' ||
-                          window.location.hostname.includes('.local');
-      
-      // Get the actual domain or use the configured one for local testing
-      const currentDomain = isLocalhost ? "${domain}" : window.location.hostname;
-      console.log("Using domain for verification:", currentDomain);
-      
-      // Load the script
-      const script = document.createElement('script');
-      script.src = "${baseUrl}/api/cookie-consent?key=${apiKey}&domain=" + currentDomain + "&t=${timestamp}&debug=true";
-      script.async = true;
-      
-      script.onerror = function(e) {
-        console.error("Failed to load cookie consent script:", e);
-        console.log("Script URL attempted:", script.src);
-        console.log("Please check that:");
-        console.log("1. The domain is correctly configured in your cookie consent settings");
-        console.log("2. The API endpoint is accessible");
-        console.log("3. CORS is properly configured if testing across domains");
-      };
-      
-      script.onload = function() {
-        console.log("Cookie consent script loaded successfully");
-      };
-      
-      document.body.appendChild(script);
-    } catch(e) {
-      console.error("Error initializing cookie consent:", e);
-    }
-  })();
+  // Get the current domain dynamically
+  const currentDomain = window.location.hostname;
+  
+  // Create the cookie consent script
+  const script = document.createElement('script');
+  script.src = "${baseUrl}/api/cookie-consent?key=${apiKey}&domain=" + currentDomain;
+  script.async = true;
+  document.body.appendChild(script);
+})();
 </script>`
   }
 
@@ -188,10 +151,16 @@ export default function DashboardPage() {
     }
   }
 
+  // Replace the handleSaveDomainSettings function with this:
   const handleSaveDomainSettings = async (domain: string) => {
     if (!domain) return
 
     try {
+      setSaving(true)
+
+      // Log what we're saving
+      console.log(`Saving settings for ${domain}:`, domainSettings[domain])
+
       const response = await fetch("/api/admin/domain-settings", {
         method: "POST",
         headers: {
@@ -205,12 +174,26 @@ export default function DashboardPage() {
       })
 
       if (response.ok) {
+        const data = await response.json()
+        console.log("Settings saved successfully:", data)
+
+        // Reload the domains to get fresh settings
+        await loadDomains()
+
         alert(`Settings for ${domain} saved successfully!`)
+
         // Update embed code after saving
         setEmbedCode(generateEmbedCode(domain))
+      } else {
+        const data = await response.json()
+        console.error("Error saving settings:", data)
+        alert(`Error saving settings: ${data.error || "Unknown error"}`)
       }
     } catch (error) {
       console.error("Failed to save domain settings", error)
+      alert(`Failed to save domain settings: ${error}`)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -497,16 +480,35 @@ export default function DashboardPage() {
                     Cancel
                   </Button>
                   <div className="space-x-2">
-                    <Button onClick={() => handleSaveDomainSettings(selectedDomain)}>Save Settings</Button>
+                    <Button onClick={() => handleSaveDomainSettings(selectedDomain)} disabled={saving}>
+                      {saving ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save Settings"
+                      )}
+                    </Button>
                     <Button
                       variant="default"
                       onClick={() => {
                         handleSaveDomainSettings(selectedDomain)
                         setActiveTab("embed")
                       }}
+                      disabled={saving}
                     >
-                      Save & Get Embed Code
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      {saving ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          Save & Get Embed Code
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardFooter>
@@ -525,8 +527,8 @@ export default function DashboardPage() {
                     <div className="relative mt-1">
                       <textarea
                         id="embed-code"
-                        className="w-full h-32 p-3 pr-10 font-mono text-sm border rounded bg-gray-50"
-                        value={embedCode}
+                        className="w-full h-24 p-3 pr-10 font-mono text-sm border rounded bg-gray-50"
+                        value={generateEmbedCode(selectedDomain)}
                         readOnly
                         onClick={(e) => (e.target as HTMLTextAreaElement).select()}
                       />
@@ -534,7 +536,7 @@ export default function DashboardPage() {
                         variant="ghost"
                         size="icon"
                         className="absolute top-2 right-2"
-                        onClick={() => copyToClipboard(embedCode)}
+                        onClick={() => copyToClipboard(generateEmbedCode(selectedDomain))}
                       >
                         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                       </Button>
@@ -545,15 +547,8 @@ export default function DashboardPage() {
                     <h3 className="font-medium mb-2">Instructions</h3>
                     <ol className="list-decimal list-inside space-y-2 text-sm">
                       <li>Copy the embed code above</li>
-                      <li>Paste the code just before the closing &lt;/body&gt; tag on your website</li>
-                      <li>The cookie consent banner will automatically appear for new visitors</li>
-                      <li>
-                        <strong>Important:</strong> This code will only work on {selectedDomain}
-                      </li>
-                      <li>
-                        <strong>For local testing:</strong> The code will automatically detect localhost/127.0.0.1 and
-                        use the configured domain ({selectedDomain}) for verification
-                      </li>
+                      <li>Paste it just before the closing &lt;/body&gt; tag on your website</li>
+                      <li>The cookie consent banner will appear automatically</li>
                     </ol>
                   </div>
                 </CardContent>
@@ -579,4 +574,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-

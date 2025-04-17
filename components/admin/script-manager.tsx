@@ -204,4 +204,3 @@ export function ScriptManager({ scripts, onChange }: ScriptManagerProps) {
     </div>
   )
 }
-

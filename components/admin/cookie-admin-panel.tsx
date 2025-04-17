@@ -403,4 +403,3 @@ export function CookieAdminPanel({
     </div>
   )
 }
-

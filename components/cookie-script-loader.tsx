@@ -61,4 +61,3 @@ function loadScript(src: string, attributes?: Record<string, string | boolean>) 
 
   return script
 }
-

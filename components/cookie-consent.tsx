@@ -229,4 +229,3 @@ declare global {
     }
   }
 }
-

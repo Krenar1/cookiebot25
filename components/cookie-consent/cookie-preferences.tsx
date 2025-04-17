@@ -89,4 +89,3 @@ export function CookiePreferences({ categories, settings, onChange, theme }: Coo
     </CardContent>
   )
 }
-

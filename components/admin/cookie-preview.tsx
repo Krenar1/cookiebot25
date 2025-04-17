@@ -47,4 +47,3 @@ export function CookiePreview({ categories, theme, position, companyName }: Cook
     </div>
   )
 }
-
